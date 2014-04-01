@@ -1,0 +1,5 @@
+/src/*.pyc
+/src/config.py
+/.project
+/.pydevproject
+/.settings

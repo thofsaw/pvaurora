@@ -1,0 +1,25 @@
+
+Input 1 Voltage             =  248.228424 V
+Input 1 Current             =    1.396105 A
+Input 1 Power               =  346.552887 W
+
+Input 2 Voltage             =  270.225586 V
+Input 2 Current             =    1.598310 A
+Input 2 Power               =  431.904388 W
+
+Grid Voltage Reading        =  236.763657 V
+Grid Current Reading        =    3.461205 A
+Grid Power Reading          =  798.807617 W
+Frequency Reading           =   49.988003 Hz.
+
+DC/AC Conversion Efficiency =       102.6 %
+Inverter Temperature        =   36.752666 C
+Booster Temperature         =   35.172371 C
+
+Daily Energy               =      13.921 kWh
+Weekly Energy              =      13.921 kWh
+Monthly Energy             =     288.169 kWh
+Yearly Energy              =     529.199 kWh
+Total Energy               =   18514.187 kWh
+Partial Energy             =   18408.328 kWh
+
