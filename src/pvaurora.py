@@ -17,6 +17,7 @@ data, via external command, and uploading to pvoutput.org account
 
 import argparse
 import datetime
+import logging
 import os
 import httplib
 import urllib
@@ -25,6 +26,7 @@ import sys
 
 import config
 import timezone
+import sun
 
 __all__ = []
 __version__ = '0.1.0'
@@ -66,7 +68,7 @@ class InverterMeasurement(object):
         '''Constructor
         
         Args:
-            dt (datetime): date and time of measurement
+            dt (datetime.datetime): date and time of measurement
             str1_power (PowerValue): pv string 1 power value
             str2_power (PowerValue): pv string 2 power value
             grid_power (PowerValue): grid power value
@@ -115,7 +117,7 @@ class InverterMeasurement(object):
         return self._daily_energy
 
     def __str__(self):
-        return "%s S1(%s) S2(%s) G(%s %.1fHz) dcac=%.1f%% inv=%.1f°C env=%.1f°C daily=%.0fWh" % (
+        return "%s S1(%s) S2(%s) G(%s %.1fHz) eff=%.1f%% inv=%.1f°C env=%.1f°C daily=%.0fWh" % (
             self._dt, self._str1_power, self._str2_power, self._grid_power, self._grid_freq,
             self._dc_ac_eff * 100.0, self._inv_temp, self._env_temp, self._daily_energy)
 
@@ -131,7 +133,7 @@ class PvOutputApi(object):
         self._api_key = api_key
         self._system_id = system_id
     
-    def add_status(self, dt, daily_energy, power, temperature, voltage, verbose=False):
+    def add_status(self, dt, daily_energy, power, temperature, voltage):
         '''Add status api
         
         Args:
@@ -140,7 +142,6 @@ class PvOutputApi(object):
             power (float): output power in W
             temperature (float): inverter temperature in C
             voltage (float): output voltage in V
-            verbose (bool): outputs diagnostic info to stdout
             
         Returns:
             bool:
@@ -160,18 +161,15 @@ class PvOutputApi(object):
                "Accept" : "text/plain",
                "X-Pvoutput-SystemId" : self._system_id,
                "X-Pvoutput-Apikey" : self._api_key }
-        if verbose:
-            print("Connecting to %s" % host)
+        logging.info("Connecting to %s" % host)
         conn = httplib.HTTPConnection(host)
-        if verbose:
-            print("sending: %s" % params)
+        logging.info("sending: %s" % params)
         conn.request("POST", service, params, headers)
         response = conn.getresponse()
         if response.status != 200:
-            print "POST failed: ", response.status, response.reason, response.read()
+            logging.info("POST failed: %d %s" % (response.status, response.reason))
             return False
-        if verbose:
-            print "POST OK: ", response.status, response.reason, response.read()
+        logging.info("POST ok: %d %s" % (response.status, response.reason))
         return True
 
 
@@ -198,7 +196,7 @@ class AuroraRunner(object):
         '''Decodes a status line obtained by get_status()
         
         Args:
-            dt (datetime): date and time of acquisition 
+            dt (datetime.datetime): date and time of acquisition 
             line (str): output line obtained by get_status()
             
         Returns:
@@ -221,8 +219,8 @@ class AuroraRunner(object):
         env_temp = values[12]
         daily_energy = values[13] * 1000.0
         return InverterMeasurement(dt, str1_power, str2_power, grid_power, grid_freq, dc_ac_eff, inv_temp, env_temp, daily_energy)
-        
-                    
+
+
 class CLIError(Exception):
     '''Generic exception to raise and log different fatal errors.'''
     def __init__(self, msg):
@@ -233,6 +231,38 @@ class CLIError(Exception):
     def __unicode__(self):
         return self.msg
 
+def replace_tz_datetime(dt, t):
+    return dt.replace(hour=t.hour, minute=t.minute, second=t.second, microsecond=t.microsecond)
+    
+def is_daylight(dt, latitude, longitude, delta):
+    '''Determines if time is daylight or night time
+        Args:
+            dt (datetime.datetime): date and time of observation 
+            latitude (float): latitude of observation
+            longitude (float): longitude of observation
+            delta (datetime.timedelta): time before sunrise and after sunset to extend daylight range
+            
+        Returns:
+            bool:
+                True: is daylight time
+                False: is night time
+    '''
+    local_sun = sun.sun(latitude, longitude)
+    sunrise = local_sun.sunrise(dt)
+    sunset = local_sun.sunset(dt)
+    delta = datetime.timedelta(minutes=delta)
+    logging.info("Sunrise: %s" % sunrise)
+    logging.info("Sunset : %s" % sunset)
+    logging.info("Delta  : %s" % delta)
+    sunrise_dt = replace_tz_datetime(dt, sunrise)
+    sunset_dt = replace_tz_datetime(dt, sunset)
+    daylight = sunrise_dt <= dt <= sunset_dt
+    if daylight:
+        logging.info("Daylight time")
+    else:
+        logging.info("Night time")
+    return daylight 
+    
 def main():
     '''Command line options.'''
     program_name = os.path.basename(sys.argv[0])
@@ -261,11 +291,11 @@ USAGE
                             help="command to capture data from power inverter")
         parser.add_argument("-a", "--api-key", dest="api_key", metavar="KEY", required=True,
                             help="API key to access pvoutput.org services")
-        parser.add_argument("-i", "--system-id-primary", dest="system_id1", metavar="SID", required=True,
+        parser.add_argument("-i1", "--system-id-primary", dest="system_id1", metavar="SID", required=True,
                             help="primary system id on pvoutput.org where to store first pv string data")
-        parser.add_argument("-I", "--system-id-secondary", dest="system_id2", metavar="SID",
+        parser.add_argument("-i2", "--system-id-secondary", dest="system_id2", metavar="SID",
                             help="secondary system id on pvoutput.org where to store second pv string data")
-        parser.add_argument("-m", "--minutes-range-extend", dest="minutes_range_extend", metavar="NUM", default="3600", type=int,
+        parser.add_argument("-m", "--minutes_delta", dest="delta", metavar="NUM", default="3600", type=int,
                             help="executes if current time is %(metavar)s minutes before sunrise and %(metavar)s minutes after sunset [default: %(default)s]")
         parser.add_argument("--latitude", dest="latitude", metavar="LAT", type=float,
                             help="latitude for sunrise and sunset calculation")
@@ -278,38 +308,41 @@ USAGE
         args = parser.parse_args()
 
         if args.verbose > 0:
-            print("Verbose mode on")
+            logging.basicConfig(level=logging.INFO)
 
         if (args.longitude and not args.latitude) or (not args.longitude and args.latitude): 
             raise CLIError("you must specify both latitude and longitude to enable execution between sunset-sunrise or none to disable")
-
-        api = PvOutputApi (args.api_key, args.system_id1)
-        api.add_status(datetime.datetime.now(), 12000.0, 1800.0, 30.0, 200.0, True)
+        
+        now = datetime.datetime.now(tz=timezone.LocalTimezone())
+        logging.info("Date   : %s" % now.date())
+        logging.info("Time   : %s" % now.time())
+            
+        if args.latitude and args.longitude:
+            if not is_daylight(now, float(args.latitude), float(args.longitude), int(args.delta)):
+                logging.info("Not daylight time: exiting")
+                return 0
+                 
+        #api = PvOutputApi(args.api_key, int(args.system_id1))
+        #api.add_status(now, 12000.0, 1800.0, 30.0, 200.0, True)
         return 0
     except KeyboardInterrupt:
         ### handle keyboard interrupt ###
         return 0
-    except Exception, e:
-        if DEBUG:
-            raise(e)
-        indent = len(program_name) * " "
-        sys.stderr.write(program_name + ": " + repr(e) + "\n")
-        sys.stderr.write(indent + "  for help use --help")
-        return 2
+#     except Exception, e:
+#         if DEBUG:
+#             raise(e)
+#         indent = len(program_name) * " "
+#         sys.stderr.write(program_name + ": " + repr(e) + "\n")
+#         sys.stderr.write(indent + "  for help use --help")
+#         return 2
 
 if __name__ == "__main__":
     if DEBUG:
-        with open("doc/prod.txt") as f:
-            aurora = AuroraRunner()
-            line = f.readline()
-            m = aurora.decode_status(datetime.datetime.now(tz=timezone.LocalTimezone()), line)
-            print m
-        sys.exit(0)
-    
+        #m = aurora.decode_status(datetime.datetime.now(tz=timezone.LocalTimezone()), line)
         sys.argv.append("-v") # verbose
-        sys.argv.extend(["-m", "3600", "--latitude", str(config.LATITUDE), "--longitude", str(config.LOGITUDE)]) # sunrise sunset
+        sys.argv.extend(["-m", "60", "--latitude", str(config.LATITUDE), "--longitude", str(config.LOGITUDE)]) # sunrise sunset
         sys.argv.extend(["-c", "/aurora -a 2 -c -d0 -e -P 400 -Y 20 -W /dev/ttyUSB0"])
         sys.argv.extend(["-a", config.API_KEY])
-        sys.argv.extend(["-i", str(config.SYSTEM_ID1)])
-        sys.argv.extend(["-I", str(config.SYSTEM_ID2)])
+        sys.argv.extend(["-i1", str(config.SYSTEM_ID1)])
+        sys.argv.extend(["-i2", str(config.SYSTEM_ID2)])
     sys.exit(main())
