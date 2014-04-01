@@ -1,0 +1,8 @@
+websolarlog
+-----------
+execute: -a $ADDR $OPT $PORT
+history data: -k 366 -Y 60
+get info: -p -n -f -g -m -v -Y 10
+get data: -c -T $COMOPTION -d0 -e
+get alarms: -A -Y 10
+
