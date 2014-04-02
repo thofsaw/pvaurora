@@ -24,7 +24,6 @@ import urllib
 import subprocess
 import sys
 
-import config
 import timezone
 import sun
 
@@ -351,6 +350,7 @@ USAGE
 
 if __name__ == "__main__":
     if DEBUG:
+        import config        
         sys.argv.append("-v") # verbose
         sys.argv.extend(["-m", "60", "--latitude", str(config.LATITUDE), "--longitude", str(config.LONGITUDE)]) # sunrise sunset
         sys.argv.extend(["-c", "./aurora -a 2 -c -d0 -e -P 400 -Y 20 -W /dev/ttyUSB0"])
