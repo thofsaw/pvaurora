@@ -28,7 +28,7 @@ import timezone
 import sun
 
 __all__ = []
-__version__ = '0.1.0'
+__version__ = '0.1.1'
 __date__ = '2014-03-26'
 __updated__ = '2014-03-26'
 
@@ -133,14 +133,13 @@ class PvOutputApi(object):
         self._api_key = api_key
         self._system_id = system_id
     
-    def add_status(self, dt, daily_energy, power, temperature):
+    def add_status(self, dt, daily_energy, power):
         '''Add status api
         
         Args:
             dt (datetime): date and time
             daily_energy (float): produced energy from start of the day in Wh
             power (float): output power in W
-            temperature (float): inverter temperature in C
             
         Returns:
             bool:
@@ -152,8 +151,7 @@ class PvOutputApi(object):
         data = { 'd' : dt.strftime("%Y%m%d"),
             't' : dt.strftime("%H:%M"),
             'v1' : daily_energy,
-            'v2' : power,
-            'v5' : temperature
+            'v2' : power
         }
         params = urllib.urlencode(data)
         headers = { "Content-type" : "application/x-www-form-urlencoded",
@@ -186,7 +184,7 @@ class AuroraRunner(object):
                 "" if failure
         '''
         logging.info("Executing '%s'" % cmdline)
-        proc = subprocess.Popen(cmdline, stdout=subprocess.PIPE)
+        proc = subprocess.Popen(cmdline.split(), stdout=subprocess.PIPE)
         out = proc.communicate()[0]
         logging.info("Return code = %d" % proc.returncode)
         logging.info("Output '%s'" % out)
@@ -332,7 +330,7 @@ USAGE
             logging.info("Decode error: exiting")
             return 2
         api = PvOutputApi(args.api_key, int(args.system_id))
-        if not api.add_status(now, m.daily_energy, m.str1_power.power + m.str2_power.power, m.inv_temp):
+        if not api.add_status(now, m.daily_energy, m.str1_power.power + m.str2_power.power):
             logging.info("Send error: exiting")
             return 3
         logging.info("Completed successfully")
@@ -340,20 +338,20 @@ USAGE
     except KeyboardInterrupt:
         ### handle keyboard interrupt ###
         return 0
-    except Exception, e:
-        if DEBUG:
-            raise(e)
-        indent = len(program_name) * " "
-        sys.stderr.write(program_name + ": " + repr(e) + "\n")
-        sys.stderr.write(indent + "  for help use --help")
-        return -1
+#    except Exception, e:
+#        if DEBUG:
+#            raise(e)
+#        indent = len(program_name) * " "
+#        sys.stderr.write(program_name + ": " + repr(e) + "\n")
+#        sys.stderr.write(indent + "  for help use --help")
+#        return -1
 
 if __name__ == "__main__":
     if DEBUG:
         import config        
         sys.argv.append("-v") # verbose
-        sys.argv.extend(["-m", "60", "--latitude", str(config.LATITUDE), "--longitude", str(config.LONGITUDE)]) # sunrise sunset
-        sys.argv.extend(["-c", "./aurora -a 2 -c -d0 -e -P 400 -Y 20 -W /dev/ttyUSB0"])
+        sys.argv.extend(["-m", "30", "--latitude", str(config.LATITUDE), "--longitude", str(config.LONGITUDE)]) # sunrise sunset
+        sys.argv.extend(["-c", "/root/pvaurora/aurora -a 2 -c -d0 -e -P 400 -Y 20 -W /dev/ttyUSB0"])
         sys.argv.extend(["-a", config.API_KEY])
         sys.argv.extend(["-i", str(config.SYSTEM_ID)])
     sys.exit(main())
