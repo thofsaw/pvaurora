@@ -62,6 +62,7 @@ class PowerValue(object):
     def __str__(self):
         return "%.1fV %.1fA %.1fW" % (self._voltage, self._current, self._power)
 
+    
 class InverterMeasurement(object):
     '''Inverter measurement value'''
     def __init__(self, dt, str1_power, str2_power, grid_power, grid_freq, dc_ac_eff, inv_temp, env_temp, daily_energy):
@@ -133,7 +134,7 @@ class PvOutputApi(object):
         self._api_key = api_key
         self._system_id = system_id
     
-    def add_status(self, dt, daily_energy, power, temperature, voltage):
+    def add_status(self, dt, daily_energy, power, temperature):
         '''Add status api
         
         Args:
@@ -141,7 +142,6 @@ class PvOutputApi(object):
             daily_energy (float): produced energy from start of the day in Wh
             power (float): output power in W
             temperature (float): inverter temperature in C
-            voltage (float): output voltage in V
             
         Returns:
             bool:
@@ -154,8 +154,8 @@ class PvOutputApi(object):
             't' : dt.strftime("%H:%M"),
             'v1' : daily_energy,
             'v2' : power,
-            'v5' : temperature,
-            'v6' : voltage }
+            'v5' : temperature
+        }
         params = urllib.urlencode(data)
         headers = { "Content-type" : "application/x-www-form-urlencoded",
                "Accept" : "text/plain",
@@ -186,8 +186,11 @@ class AuroraRunner(object):
                 output line if success
                 "" if failure
         '''
+        logging.info("Executing '%s'" % cmdline)
         proc = subprocess.Popen(cmdline, stdout=subprocess.PIPE)
         out = proc.communicate()[0]
+        logging.info("Return code = %d" % proc.returncode)
+        logging.info("Output '%s'" % out)
         if proc.returncode != 0:
             return ""
         return out
@@ -262,7 +265,8 @@ def is_daylight(dt, latitude, longitude, delta):
     else:
         logging.info("Night time")
     return daylight 
-    
+
+
 def main():
     '''Command line options.'''
     program_name = os.path.basename(sys.argv[0])
@@ -291,11 +295,9 @@ USAGE
                             help="command to capture data from power inverter")
         parser.add_argument("-a", "--api-key", dest="api_key", metavar="KEY", required=True,
                             help="API key to access pvoutput.org services")
-        parser.add_argument("-i1", "--system-id-primary", dest="system_id1", metavar="SID", required=True,
-                            help="primary system id on pvoutput.org where to store first pv string data")
-        parser.add_argument("-i2", "--system-id-secondary", dest="system_id2", metavar="SID",
-                            help="secondary system id on pvoutput.org where to store second pv string data")
-        parser.add_argument("-m", "--minutes_delta", dest="delta", metavar="NUM", default="3600", type=int,
+        parser.add_argument("-i", "--system-id", dest="system_id", metavar="SID", required=True,
+                            help="system id on pvoutput.org where to store both strings pv data")
+        parser.add_argument("-m", "--minutes_delta", dest="delta", metavar="NUM", default="30", type=int,
                             help="executes if current time is %(metavar)s minutes before sunrise and %(metavar)s minutes after sunset [default: %(default)s]")
         parser.add_argument("--latitude", dest="latitude", metavar="LAT", type=float,
                             help="latitude for sunrise and sunset calculation")
@@ -321,28 +323,37 @@ USAGE
             if not is_daylight(now, float(args.latitude), float(args.longitude), int(args.delta)):
                 logging.info("Not daylight time: exiting")
                 return 0
-                 
-        #api = PvOutputApi(args.api_key, int(args.system_id1))
-        #api.add_status(now, 12000.0, 1800.0, 30.0, 200.0, True)
+        runner = AuroraRunner()
+        line = runner.get_status(args.command)
+        if not line:
+            logging.info("Command error: exiting")
+            return 1
+        m = runner.decode_status(now, line)
+        if not m:
+            logging.info("Decode error: exiting")
+            return 2
+        api = PvOutputApi(args.api_key, int(args.system_id))
+        if not api.add_status(now, m.daily_energy, m.str1_power.power + m.str2_power.power, m.inv_temp):
+            logging.info("Send error: exiting")
+            return 3
+        logging.info("Completed successfully")
         return 0
     except KeyboardInterrupt:
         ### handle keyboard interrupt ###
         return 0
-#     except Exception, e:
-#         if DEBUG:
-#             raise(e)
-#         indent = len(program_name) * " "
-#         sys.stderr.write(program_name + ": " + repr(e) + "\n")
-#         sys.stderr.write(indent + "  for help use --help")
-#         return 2
+    except Exception, e:
+        if DEBUG:
+            raise(e)
+        indent = len(program_name) * " "
+        sys.stderr.write(program_name + ": " + repr(e) + "\n")
+        sys.stderr.write(indent + "  for help use --help")
+        return -1
 
 if __name__ == "__main__":
     if DEBUG:
-        #m = aurora.decode_status(datetime.datetime.now(tz=timezone.LocalTimezone()), line)
         sys.argv.append("-v") # verbose
-        sys.argv.extend(["-m", "60", "--latitude", str(config.LATITUDE), "--longitude", str(config.LOGITUDE)]) # sunrise sunset
-        sys.argv.extend(["-c", "/aurora -a 2 -c -d0 -e -P 400 -Y 20 -W /dev/ttyUSB0"])
+        sys.argv.extend(["-m", "60", "--latitude", str(config.LATITUDE), "--longitude", str(config.LONGITUDE)]) # sunrise sunset
+        sys.argv.extend(["-c", "./aurora -a 2 -c -d0 -e -P 400 -Y 20 -W /dev/ttyUSB0"])
         sys.argv.extend(["-a", config.API_KEY])
-        sys.argv.extend(["-i1", str(config.SYSTEM_ID1)])
-        sys.argv.extend(["-i2", str(config.SYSTEM_ID2)])
+        sys.argv.extend(["-i", str(config.SYSTEM_ID)])
     sys.exit(main())
