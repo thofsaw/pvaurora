@@ -5,3 +5,5 @@
 /.settings
 venv
 .idea
+config.json
+/src/__pycache__

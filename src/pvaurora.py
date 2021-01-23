@@ -161,10 +161,8 @@ class PvOutputApi(object):
             api_key (str): API key
             system_id (int): system id
         """
-        # self._api_key = api_key
-        # self._system_id = system_id
-        self.headers["X-Pvoutput-SystemId"] = system_id
-        self.headers["X-Pvoutput-Apikey"] = api_key
+        self.headers["X-Pvoutput-SystemId"] = str(system_id)
+        self.headers["X-Pvoutput-Apikey"] = str(api_key)
 
     def _post(self, endpoint, params):
         """
@@ -195,20 +193,13 @@ class PvOutputApi(object):
                 True -- success
                 False -- failure
         """
-        # host = "pvoutput.org"
-        # service = "/service/r2/addstatus.jsp"
         params = {'d': dt.strftime("%Y%m%d"),
                   't': dt.strftime("%H:%M"),
                   'v1': daily_energy,
                   'v2': power
                   }
 
-        # params = urllib.urlencode(data)
-        # logging.info("Connecting to %s" % host)
-        # conn = httplib.HTTPConnection(host)
         logging.info("Sending: %s" % params)
-        # conn.request("POST", service, params, headers)
-        # response = conn.getresponse()
         response = self._post(Endpoints.ADD_STATUS, params)
         logging.info(response.url)
         if response.status_code != 200:
@@ -242,26 +233,6 @@ class AuroraRunner(object):
             return ""
         return out
 
-    def get_status_run(self, cmdline_list):
-        """
-        Executes aurora command and captures output
-
-        Args:
-            cmdline_list (list): command line to execute as a list of params (must specify -c -d0 -e)
-
-        Returns:
-            str:
-                output line if success
-                "" if failure
-        """
-        logging.info("Executing '%s'" % " ".join(cmdline_list))
-        proc = subprocess.run(cmdline_list, stdout=subprocess.PIPE)
-        out = proc.communicate()[0]
-        logging.info("Return code = %d" % proc.returncode)
-        logging.info("Output '%s'" % out)
-        if proc.returncode != 0:
-            return ""
-        return out
 
     def decode_status(self, dt, line):
         """
@@ -366,26 +337,26 @@ def print_version(ctx, param, value):
 @click.option('-V', '--version', is_flag=True, callback=print_version, expose_value=False, is_eager=True)
 def main(command, api_key, system_id, minutes_delta, latitude, longitude, verbose):
     """Command line options."""
-    program_name = os.path.basename(sys.argv[0])
-    program_version = "v%s" % __version__
-    program_build_date = str(__updated__)
-    program_version_message = '%%(prog)s %s (%s)' % (program_version, program_build_date)
-    program_shortdesc = __import__('__main__').__doc__.split("\n")[1]
-    program_license = '''%s
-
-  Created by Yuri Valentini on %s.
-  Copyrights:
-    2014 Yuri Valentini. All rights reserved.
-    2021 Paul Phillips. All rights reserved.
-
-  Licensed under the GNU GENERAL PUBLIC LICENSE v3
-  https://www.gnu.org/copyleft/gpl.html
-
-  Distributed on an "AS IS" basis without warranties
-  or conditions of any kind, either express or implied.
-
-USAGE
-''' % (program_shortdesc, str(__date__))
+#     program_name = os.path.basename(sys.argv[0])
+#     program_version = "v%s" % __version__
+#     program_build_date = str(__updated__)
+#     program_version_message = '%%(prog)s %s (%s)' % (program_version, program_build_date)
+#     program_shortdesc = __import__('__main__').__doc__.split("\n")[1]
+#     program_license = '''%s
+#
+#   Created by Yuri Valentini on %s.
+#   Copyrights:
+#     2014 Yuri Valentini. All rights reserved.
+#     2021 Paul Phillips. All rights reserved.
+#
+#   Licensed under the GNU GENERAL PUBLIC LICENSE v3
+#   https://www.gnu.org/copyleft/gpl.html
+#
+#   Distributed on an "AS IS" basis without warranties
+#   or conditions of any kind, either express or implied.
+#
+# USAGE
+# ''' % (program_shortdesc, str(__date__))
 
     try:
         # Setup argument parser
@@ -410,12 +381,12 @@ USAGE
         # # Process arguments
         # args = parser.parse_args()
         #
-        # if args.verbose > 0:
-        #     logging.basicConfig(level=logging.INFO)
-        #
-        # if (args.longitude and not args.latitude) or (not args.longitude and args.latitude):
-        #     raise CLIError(
-        #         "you must specify both latitude and longitude to enable execution between sunset-sunrise or none to disable")
+        if verbose > 0:
+            logging.basicConfig(level=logging.INFO)
+
+        if (longitude and not latitude) or (not longitude and latitude):
+            raise CLIError(
+                "you must specify both latitude and longitude to enable execution between sunset-sunrise or none to disable")
 
         now = datetime.datetime.now(tz=timezone.LocalTimezone())
         logging.info("Date   : %s" % now.date())
