@@ -422,7 +422,7 @@ USAGE
         logging.info("Time   : %s" % now.time())
 
         if latitude and longitude:
-            if not is_daylight(now, float(latitude), float(longitude), int(delta)):
+            if not is_daylight(now, float(latitude), float(longitude), int(minutes_delta)):
                 logging.info("Not daylight time: exiting")
                 return 0
         runner = AuroraRunner()
