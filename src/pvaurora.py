@@ -19,12 +19,9 @@ import click
 import requests
 import datetime
 import logging
-import os
-
-import urllib
+import json
 import subprocess
 import sys
-
 import timezone
 import sun
 
@@ -33,6 +30,8 @@ legacy imports
 '''
 # import argparse
 # import httplib
+# import urllib
+# import os
 
 __all__ = []
 __version__ = '0.1.1'
@@ -321,13 +320,14 @@ def print_version(ctx, param, value):
 
 
 @click.command()
-@click.option("-c", "--command", required=True, type=str, envvar='CMD',
+@click.option("--config", type=str, help="full path to JSON configuration file")
+@click.option("-c", "--command", required=False, type=str, envvar='CMD',
               help="command to capture data from power inverter")
-@click.option("-a", "--api-key", required=True, type=str, envvar='KEY',
+@click.option("-a", "--api-key", required=False, type=str, envvar='KEY',
               help="API key to access pvoutput.org services")
-@click.option("-i", "--system-id", required=True, type=str, envvar='SID',
+@click.option("-i", "--system-id", required=False, type=str, envvar='SID',
               help="system id on pvoutput.org where to store both strings pv data")
-@click.option("-m", "--minutes_delta", envvar='NUM', default="30", type=int,
+@click.option("-m", "--minutes_delta", envvar='NUM', default="60", type=int,
               help="executes if current time is %(metavar)s minutes before sunrise and %(metavar)s minutes after sunset [default: %(default)s]")
 @click.option("--latitude", envvar="LAT", type=float,
               help="latitude for sunrise and sunset calculation")
@@ -335,54 +335,31 @@ def print_version(ctx, param, value):
               help="longitude for sunrise and sunset calculation")
 @click.option("-v", "--verbose", count=True, help="set verbosity level")
 @click.option('-V', '--version', is_flag=True, callback=print_version, expose_value=False, is_eager=True)
-def main(command, api_key, system_id, minutes_delta, latitude, longitude, verbose):
+def main(config, command, api_key, system_id, minutes_delta, latitude, longitude, verbose):
     """Command line options."""
-#     program_name = os.path.basename(sys.argv[0])
-#     program_version = "v%s" % __version__
-#     program_build_date = str(__updated__)
-#     program_version_message = '%%(prog)s %s (%s)' % (program_version, program_build_date)
-#     program_shortdesc = __import__('__main__').__doc__.split("\n")[1]
-#     program_license = '''%s
-#
-#   Created by Yuri Valentini on %s.
-#   Copyrights:
-#     2014 Yuri Valentini. All rights reserved.
-#     2021 Paul Phillips. All rights reserved.
-#
-#   Licensed under the GNU GENERAL PUBLIC LICENSE v3
-#   https://www.gnu.org/copyleft/gpl.html
-#
-#   Distributed on an "AS IS" basis without warranties
-#   or conditions of any kind, either express or implied.
-#
-# USAGE
-# ''' % (program_shortdesc, str(__date__))
 
     try:
-        # Setup argument parser
-        # parser = argparse.ArgumentParser(description=program_license,
-        #                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-        # parser.add_argument("-c", "--command", dest="command", metavar="CMD", required=True,
-        #                     help="command to capture data from power inverter")
-        # parser.add_argument("-a", "--api-key", dest="api_key", metavar="KEY", required=True,
-        #                     help="API key to access pvoutput.org services")
-        # parser.add_argument("-i", "--system-id", dest="system_id", metavar="SID", required=True,
-        #                     help="system id on pvoutput.org where to store both strings pv data")
-        # parser.add_argument("-m", "--minutes_delta", dest="delta", metavar="NUM", default="30", type=int,
-        #                     help="executes if current time is %(metavar)s minutes before sunrise and %(metavar)s minutes after sunset [default: %(default)s]")
-        # parser.add_argument("--latitude", dest="latitude", metavar="LAT", type=float,
-        #                     help="latitude for sunrise and sunset calculation")
-        # parser.add_argument("--longitude", dest="longitude", metavar="LON", type=float,
-        #                     help="longitude for sunrise and sunset calculation")
-        # parser.add_argument("-v", "--verbose", dest="verbose", action="count",
-        #                     help="set verbosity level [default: %(default)s]")
-        # parser.add_argument('-V', '--version', action='version', version=program_version_message)
-
-        # # Process arguments
-        # args = parser.parse_args()
-        #
         if verbose > 0:
             logging.basicConfig(level=logging.INFO)
+
+        func_params = {"command": command,
+                       "api_key": api_key,
+                       "system_id": system_id,
+                       "minutes_delta": minutes_delta,
+                       "latitude": latitude,
+                       "longitude": longitude}
+
+        if config:
+            with open(config, 'r') as json_config_file:
+                config_params = json.load(json_config_file)
+                for key, value in func_params.items():
+                    if not func_params[key]:
+                        if key in config_params and config_params[key]:
+                            func_params[key] = config_params[key]
+                        else:
+                            logging.info("Missing parameter %s" % (key))
+                            return 4
+                    logging.info("Parameter %s = %s" % (key, func_params[key]))
 
         if (longitude and not latitude) or (not longitude and latitude):
             raise CLIError(
@@ -392,12 +369,13 @@ def main(command, api_key, system_id, minutes_delta, latitude, longitude, verbos
         logging.info("Date   : %s" % now.date())
         logging.info("Time   : %s" % now.time())
 
-        if latitude and longitude:
-            if not is_daylight(now, float(latitude), float(longitude), int(minutes_delta)):
+        if func_params["latitude"] and func_params["longitude"]:
+            if not is_daylight(now, float(func_params["latitude"]),
+                               float(func_params["longitude"]), int(func_params["minutes_delta"])):
                 logging.info("Not daylight time: exiting")
                 return 0
         runner = AuroraRunner()
-        line = runner.get_status(command)
+        line = runner.get_status(func_params["command"])
         if not line:
             logging.info("Command error: exiting")
             return 1
@@ -405,7 +383,7 @@ def main(command, api_key, system_id, minutes_delta, latitude, longitude, verbos
         if not m:
             logging.info("Decode error: exiting")
             return 2
-        api = PvOutputApi(api_key, int(system_id))
+        api = PvOutputApi(func_params["api_key"], int(func_params["system_id"]))
         if not api.add_status(now, m.daily_energy, m.str1_power.power + m.str2_power.power):
             logging.info("Send error: exiting")
             return 3
@@ -425,13 +403,4 @@ def main(command, api_key, system_id, minutes_delta, latitude, longitude, verbos
 #        return -1
 
 if __name__ == "__main__":
-    # if DEBUG:
-    #     import config
-    #
-    #     sys.argv.append("-v")  # verbose
-    #     sys.argv.extend(
-    #         ["-m", "30", "--latitude", str(config.LATITUDE), "--longitude", str(config.LONGITUDE)])  # sunrise sunset
-    #     sys.argv.extend(["-c", "/root/pvaurora/aurora -a 2 -c -d0 -e -P 400 -Y 20 -W /dev/ttyUSB0"])
-    #     sys.argv.extend(["-a", config.API_KEY])
-    #     sys.argv.extend(["-i", str(config.SYSTEM_ID)])
     sys.exit(main())
