@@ -5,7 +5,7 @@ pvaurora configuration file
 '''
 
 LATITUDE = 42.6
-LOGITUDE = 12.9
+LONGITUDE = 12.9
 API_KEY = "api_key_value"
 SYSTEM_ID = -1
 

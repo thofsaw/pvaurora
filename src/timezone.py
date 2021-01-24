@@ -5,9 +5,11 @@ http://docs.python.org/3/library/datetime.html#tzinfo-objects
 '''
 
 from datetime import tzinfo, timedelta, datetime
+import time as _time
 
 ZERO = timedelta(0)
 HOUR = timedelta(hours=1)
+
 
 # A UTC class.
 
@@ -23,7 +25,9 @@ class UTC(tzinfo):
     def dst(self, dt):
         return ZERO
 
+
 utc = UTC()
+
 
 # A class building tzinfo objects for fixed-offset time zones.
 # Note that FixedOffset(0, "UTC") is a different way to build a
@@ -31,7 +35,6 @@ utc = UTC()
 
 class FixedOffset(tzinfo):
     """Fixed offset in minutes east from UTC."""
-
     def __init__(self, offset, name):
         self.__offset = timedelta(minutes=offset)
         self.__name = name
@@ -45,9 +48,8 @@ class FixedOffset(tzinfo):
     def dst(self, dt):
         return ZERO
 
-# A class capturing the platform's idea of local time.
 
-import time as _time
+# A class capturing the platform's idea of local time.
 
 STDOFFSET = timedelta(seconds=-_time.timezone)
 if _time.daylight:
@@ -56,6 +58,7 @@ else:
     DSTOFFSET = STDOFFSET
 
 DSTDIFF = DSTOFFSET - STDOFFSET
+
 
 class LocalTimezone(tzinfo):
 
@@ -81,6 +84,7 @@ class LocalTimezone(tzinfo):
         stamp = _time.mktime(tt)
         tt = _time.localtime(stamp)
         return tt.tm_isdst > 0
+
 
 Local = LocalTimezone()
 
@@ -118,6 +122,7 @@ DSTEND_1987_2006 = datetime(1, 10, 25, 1)
 # on or after Oct 25.
 DSTSTART_1967_1986 = datetime(1, 4, 24, 2)
 DSTEND_1967_1986 = DSTEND_1987_2006
+
 
 class USTimeZone(tzinfo):
 
@@ -168,6 +173,7 @@ class USTimeZone(tzinfo):
             return HOUR
         else:
             return ZERO
+
 
 Eastern = USTimeZone(-5, "Eastern", "EST", "EDT")
 Central = USTimeZone(-6, "Central", "CST", "CDT")
