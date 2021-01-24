@@ -251,7 +251,7 @@ class AuroraRunner(object):
         if len(elems) != 21:
             logging.info("Unexpected number of elements in the status line: %d" % len(elems))
             return None
-        if elems[-1] != "OK":
+        if elems[-1].strip() != "OK":
             logging.info("Unexpected last element: %s. Expected 'OK'" % elems[-1])
             return None
         values = [float(i) for i in elems[:-1]]
