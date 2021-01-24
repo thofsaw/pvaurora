@@ -251,9 +251,16 @@ class AuroraRunner(object):
         if len(elems) != 21:
             logging.info("Unexpected number of elements in the status line: %d" % len(elems))
             return None
-        if elems[-1].strip() != "OK":
+
+        found_ok = False
+        if type(elems[-1]) == bytes:
+            found_ok = (elems[-1].strip().decode('ascii') == "OK")
+        elif type(elems[-1]) == str:
+            found_ok = (elems[-1].strip() == "OK")
+        if not found_ok:
             logging.info("Unexpected last element: %s. Expected 'OK'" % elems[-1])
             return None
+
         values = [float(i) for i in elems[:-1]]
         str1_power = PowerValue(values[0], values[1], values[2])
         str2_power = PowerValue(values[3], values[4], values[5])
