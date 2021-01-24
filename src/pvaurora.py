@@ -246,10 +246,13 @@ class AuroraRunner(object):
                 value if success
                 None if failure
         """
+        logging.info(line)
         elems = line.split()
         if len(elems) != 21:
+            logging.info("Unexpected number of elements in the status line: %d" % len(elems))
             return None
         if elems[-1] != "OK":
+            logging.info("Unexpected last element: %s. Expected 'OK'" % elems[-1])
             return None
         values = [float(i) for i in elems[:-1]]
         str1_power = PowerValue(values[0], values[1], values[2])
