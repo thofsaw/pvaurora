@@ -202,7 +202,7 @@ class PvOutputApi(object):
         response = self._post(Endpoints.ADD_STATUS, params)
         logging.info(response.url)
         if response.status_code != 200:
-            logging.info("POST failed: %d %s" % (response.status_code, response.reason))
+            logging.info("POST failed: %d %s: %s" % (response.status_code, response.reason, response.text))
             return False
         logging.info("POST ok: %d %s" % (response.status_code, response.reason))
         return True
